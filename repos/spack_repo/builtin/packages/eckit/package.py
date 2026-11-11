@@ -93,6 +93,12 @@ class Eckit(CMakePackage):
     )
     variant("aio", default=True, description="Enable asynchronous IO")
     variant("proj", default=False, description="Support PROJ-based projections", when="@1.27:")
+    variant(
+        "shapefile",
+        default=False,
+        description="eckit::geo geometry library support for shapefiles",
+        when="@1.32:",
+    )
     variant("fismahigh", default=False, description="Apply patching for FISMA-high compliance")
 
     depends_on("c", type="build")
@@ -135,6 +141,11 @@ class Eckit(CMakePackage):
 
     depends_on("proj@9.1.1:", when="+proj")
     depends_on("proj@9.2:", when="@:1.28.5 +proj")
+
+    depends_on("shapelib@1.6:", when="+shapefile")
+    requires(
+        "compression=zip", when="+shapefile", msg="shapefile support requires compression=zip"
+    )
 
     # The package enables LAPACK backend (together with MKL backend)
     # when='linalg=mkl'. This leads to two identical installations when:
@@ -180,6 +191,7 @@ class Eckit(CMakePackage):
             self.define_from_variant("ENABLE_UNICODE", "unicode"),
             self.define_from_variant("ENABLE_AIO", "aio"),
             self.define_from_variant("ENABLE_PROJ", "proj"),
+            self.define_from_variant("ENABLE_GEO_AREA_SHAPEFILE", "shapefile"),
             self.define("ENABLE_TESTS", self.run_tests),
             # Unconditionally disable additional unit/performance tests, since
             # they download additional data (~1.6GB):
