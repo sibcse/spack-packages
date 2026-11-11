@@ -93,6 +93,7 @@ class Eckit(CMakePackage):
     )
     variant("aio", default=True, description="Enable asynchronous IO")
     variant("proj", default=False, description="Support PROJ-based projections", when="@1.27:")
+    variant("python", default=False, description="Build Python bindings", when="@2.1:")
     variant(
         "shapefile",
         default=False,
@@ -147,6 +148,14 @@ class Eckit(CMakePackage):
         "compression=zip", when="+shapefile", msg="shapefile support requires compression=zip"
     )
 
+    extends("python", when="+python")
+    depends_on("py-cython@3:", when="+python", type="build")
+    # findlibs.load() is used at import time
+    depends_on("py-findlibs@0.1.2:", when="+python", type="run")
+    depends_on("py-pyyaml", when="+python", type="run")
+    # the bindings call EasyCURL functions, which only exist with +curl
+    requires("+curl", when="+python")
+
     # The package enables LAPACK backend (together with MKL backend)
     # when='linalg=mkl'. This leads to two identical installations when:
     #   eckit linalg=mkl
@@ -191,6 +200,7 @@ class Eckit(CMakePackage):
             self.define_from_variant("ENABLE_UNICODE", "unicode"),
             self.define_from_variant("ENABLE_AIO", "aio"),
             self.define_from_variant("ENABLE_PROJ", "proj"),
+            self.define_from_variant("ENABLE_PYTHON", "python"),
             self.define_from_variant("ENABLE_GEO_AREA_SHAPEFILE", "shapefile"),
             self.define("ENABLE_TESTS", self.run_tests),
             # Unconditionally disable additional unit/performance tests, since
@@ -219,6 +229,9 @@ class Eckit(CMakePackage):
         # system have SHARED hardcoded (in several CMakeLists.txt files).
         args.append("-DBUILD_SHARED_LIBS=ON")
 
+        if "+python" in self.spec:
+            args.append(self.define("Python3_EXECUTABLE", self.spec["python"].command.path))
+
         if "linalg=mkl" not in self.spec:
             # ENABLE_LAPACK is ignored if MKL backend is enabled
             # (the LAPACK backend is still built though):
@@ -241,6 +254,11 @@ class Eckit(CMakePackage):
         # when the admin variant is enabled.
         if self.spec.satisfies("platform=darwin") and self.spec.satisfies("+admin"):
             env.append_flags("LDFLAGS", self.spec["ncurses"].libs.ld_flags)
+
+    def setup_run_environment(self, env: EnvironmentModifications) -> None:
+        # The Python bindings locate the eckit libraries with findlibs
+        if self.spec.satisfies("+python"):
+            env.set("ECKIT_HOME", self.prefix)
 
     def check(self):
         ctest_args = ["-j", str(make_jobs)]
